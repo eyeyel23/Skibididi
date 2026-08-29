@@ -1,6 +1,5 @@
 -- ============================================================
--- AerozLib.lua  |  Self-contained loadstring library by Aeroz
--- Usage:
+-- AerozLib.lua  |
 -- local AerozLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/eyeyel23/Skibididi/refs/heads/main/Aerozlib.lua"))()
 -- ============================================================
 
