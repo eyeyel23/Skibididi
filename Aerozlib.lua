@@ -2045,7 +2045,7 @@ function AerozLib.CreatePanel(Options)
 	-- Discord button (optional, off by default)
 	-- Options.Discord = true enables it. Clicking copies the invite link
 	-- to the clipboard via setclipboard (when the executor supports it).
-	local DISCORD_INVITE    = "https://discord.gg/ZusW3VnQCf
+	local DISCORD_INVITE    = "https://discord.gg/ZusW3VnQCf"
 	-- The Discord mark is fetched from the web and cached as a PNG in the
 	-- executor workspace (see FetchCachedImage). DISCORD_ICON_ID is only
 	-- the fallback shown while the download runs or when the executor has
