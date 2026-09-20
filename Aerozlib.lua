@@ -3885,9 +3885,10 @@ function AerozLib.CreateSlider(Parent, Options)
 	MakeGloss(Row, 0.10)
 
 	local LabelW = 0
+	local Lbl
 	if Options.Label and Options.Label ~= "" then
 		LabelW = Options.Icon and 100 or 80
-		local Lbl = Instance.new("TextLabel", Row)
+		Lbl = Instance.new("TextLabel", Row)
 		Lbl.Size             = UDim2.new(0, LabelW, 1, 0)
 		Lbl.Position         = UDim2.new(0, 12, 0, 0)
 		Lbl.BackgroundTransparency = 1
@@ -3950,49 +3951,107 @@ function AerozLib.CreateSlider(Parent, Options)
 	MakeStroke(Knob, Darken(Theme.Accent, 0.24), 1).Transparency = 0.45
 	local KnobGlow = MakeInnerGlow(Knob, Theme.Accent, 9, 0.62)
 
-	local step = Options.Step
+	local Hit = Instance.new("Frame", Row)
+	Hit.Name                   = "AerozSliderHit"
+	Hit.Size                   = UDim2.new(1, trackW + 12, 0, 26)
+	Hit.Position               = UDim2.new(0, trackX - 6, 0.5, -13)
+	Hit.BackgroundTransparency = 1
+	Hit.BorderSizePixel        = 0
+	Hit.ZIndex                 = 3
 
-	local function Update(val)
+	local function layout()
+		local w = Row.AbsoluteSize.X
+		if w <= 0 then return end
+		local lw = LabelW
+		if Lbl then
+			lw = math.clamp(w - 120, 0, LabelW)
+			Lbl.Size    = UDim2.new(0, lw, 1, 0)
+			Lbl.Visible = lw >= 28
+		end
+		Track.Size     = UDim2.new(1, -(lw + 64), 0, 5)
+		Track.Position = UDim2.new(0, lw + 14, 0.5, -2.5)
+		Hit.Size       = UDim2.new(1, -(lw + 52), 0, 26)
+		Hit.Position   = UDim2.new(0, lw + 8, 0.5, -13)
+	end
+	Row:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
+	layout()
+
+	local step   = Options.Step
+	local commit = Options.CommitOnRelease == true
+
+	local function Update(val, silent)
+		val = tonumber(val) or cur
 		if step and step > 0 then
 			val = Min + math.floor((val - Min) / step + 0.5) * step
 		end
 		val = math.clamp(val, Min, Max)
 		cur = val
 		ValLbl.Text = string.format(fmt, val)
-		local pct = (val - Min) / (Max - Min)
+		local range = Max - Min
+		local pct   = range ~= 0 and (val - Min) / range or 0
 		Fill.Size     = UDim2.new(pct, 0, 1, 0)
 		Knob.Position = UDim2.new(pct, 0, 0.5, 0)
-		if Options.OnChanged then Options.OnChanged(val) end
+		if not silent and Options.OnChanged then Options.OnChanged(val) end
 	end
-	Update(cur)
+	Update(cur, commit)
 
-	local dragging = false
-	Track.InputBegan:Connect(function(inp)
+	local dragging  = false
+	local dragX     = 0
+	local dragW     = 1
+	local scroller  = nil
+	local scrollWas = true
+
+	local function valueFromX(x)
+		local pct = math.clamp((x - dragX) / dragW, 0, 1)
+		return Min + pct * (Max - Min)
+	end
+
+	local function beginDrag(inp)
+		dragging = true
+		dragX    = Track.AbsolutePosition.X
+		dragW    = math.max(Track.AbsoluteSize.X, 1)
+		scroller = Row:FindFirstAncestorOfClass("ScrollingFrame")
+		if scroller then
+			scrollWas = scroller.ScrollingEnabled
+			scroller.ScrollingEnabled = false
+		end
+		TweenService:Create(Knob, TweenSpring, { Size = UDim2.new(0, 17, 0, 17) }):Play()
+		if KnobGlow then KnobGlow.SetAlpha(0.32, TweenFast) end
+		Update(valueFromX(inp.Position.X), commit)
+	end
+
+	local function endDrag()
+		if not dragging then return end
+		dragging = false
+		if scroller then
+			scroller.ScrollingEnabled = scrollWas
+			scroller = nil
+		end
+		TweenService:Create(Knob, TweenSpring, { Size = UDim2.new(0, 13, 0, 13) }):Play()
+		if KnobGlow then KnobGlow.SetAlpha(0.62, TweenMed) end
+		if commit and Options.OnChanged then Options.OnChanged(cur) end
+	end
+
+	Hit.InputBegan:Connect(function(inp)
 		if inp.UserInputType == Enum.UserInputType.MouseButton1
 		or inp.UserInputType == Enum.UserInputType.Touch then
-			dragging = true
-			TweenService:Create(Knob, TweenSpring, { Size = UDim2.new(0, 17, 0, 17) }):Play()
-			if KnobGlow then KnobGlow.SetAlpha(0.32, TweenFast) end
-			local x = inp.Position.X
-			Update(Min + ((x - Track.AbsolutePosition.X) / Track.AbsoluteSize.X) * (Max - Min))
+			beginDrag(inp)
 		end
 	end)
 	ConnectScoped(Row, UserInputService.InputEnded, function(inp)
 		if inp.UserInputType == Enum.UserInputType.MouseButton1
 		or inp.UserInputType == Enum.UserInputType.Touch then
-			if dragging then
-				TweenService:Create(Knob, TweenSpring, { Size = UDim2.new(0, 13, 0, 13) }):Play()
-				if KnobGlow then KnobGlow.SetAlpha(0.62, TweenMed) end
-			end
-			dragging = false
+			endDrag()
 		end
 	end)
 	ConnectScoped(Row, UserInputService.InputChanged, function(inp)
 		if dragging and (inp.UserInputType == Enum.UserInputType.MouseMovement
 		or inp.UserInputType == Enum.UserInputType.Touch) then
-			local x = inp.Position.X
-			Update(Min + math.clamp((x - Track.AbsolutePosition.X) / Track.AbsoluteSize.X, 0, 1) * (Max - Min))
+			Update(valueFromX(inp.Position.X), commit)
 		end
+	end)
+	Row.Destroying:Connect(function()
+		if scroller then scroller.ScrollingEnabled = scrollWas end
 	end)
 
 	Row.MouseEnter:Connect(function()
